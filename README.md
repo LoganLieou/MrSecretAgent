@@ -11,6 +11,8 @@ generate a faiss index for an entire textbook then allow you to chat with AI
 with this added context.
 
 The entire setup is completely local using lmstudio, you could probably make some minor modifications to use ollama as well, required models for this are:
-    - openai/gpt-oss-20b
-    - text-embedding-nomic-embed-text-v1.5@q4_k_s
+
+- openai/gpt-oss-20b
+- text-embedding-nomic-embed-text-v1.5@q4_k_s
+
 ensure that both models are loaded at the same time in lmstudio.
