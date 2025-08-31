@@ -4,16 +4,14 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.docstore.document import Document
 import argparse
 import lmstudio as lms
-from chat import LMStudioEmbeddings
+# from chat import LMStudioEmbeddings
 
 store = None
 
-embeddings = LMStudioEmbeddings() # lms.embedding_model("text-embedding-nomic-embed-text-v1.5@q4_k_s")
+embeddings = lms.embedding_model("text-embedding-nomic-embed-text-v1.5@q4_k_s")
 
-"""
 def get_embeddings(texts):
     return [embeddings.embed(text) for text in texts]
-"""
 
 def split_paragraphs(rawText):
     text_splitter = CharacterTextSplitter(
@@ -31,18 +29,14 @@ def process_pdf(file_path):
     raw_text = ''
     for page in pdf.pages:
         raw_text += page.extract_text() + '\n'
-    
     paragraphs = split_paragraphs(raw_text)
 
-    # vectors = get_embeddings(paragraphs)
-    # docs = [Document(page_content=para) for para in paragraphs]
-    
+    vectors = get_embeddings(paragraphs)
+    docs = [Document(page_content=para) for para in paragraphs]
     if store is None:
-        # store = FAISS.from_embeddings(zip(paragraphs, vectors), docs)
-        store = FAISS.from_texts(paragraphs, embeddings)
+        store = FAISS.from_embeddings(zip(paragraphs, vectors), docs)
     else:
-        # new_store = FAISS.from_embeddings(zip(paragraphs, vectors), docs)
-        new_store = FAISS.from_texts(paragraphs, embeddings)
+        new_store = FAISS.from_embeddings(zip(paragraphs, vectors), docs)
         store.merge_from(new_store)
 
     store.save_local("faiss_index") # save the index locally
