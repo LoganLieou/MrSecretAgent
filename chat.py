@@ -11,7 +11,6 @@ class LMStudioEmbeddings(Embeddings):
     """
     def __init__(self, model_name="text-embedding-nomic-embed-text-v1.5@q4_k_s"):
         self.model = lms.embedding_model(model_name)
-    
     def embed_documents(self, texts):
         return [self.model.embed(text) for text in texts]
 
@@ -34,14 +33,11 @@ chain = RetrievalQA.from_chain_type(
 
 if __name__ == "__main__":
     print("Type 'exit' or 'quit' to end the chat.\n")
-    chat_history = []
     while True:
         query = input("You: ")
         if query.strip().lower() in ["exit", "quit"]:
             print("Exiting chat.")
             break
         context = "\n".join([f"Q: {q}\nA: {a}" for q, a in chat_history])
-        full_query = f"{context}\nQ: {query}" if chat_history else query
-        response = chain.run(full_query)
+        response = chain.run(query)
         print(f"Agent: {response}\n")
-        chat_history.append((query, response))
