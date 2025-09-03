@@ -38,6 +38,5 @@ if __name__ == "__main__":
         if query.strip().lower() in ["exit", "quit"]:
             print("Exiting chat.")
             break
-        context = "\n".join([f"Q: {q}\nA: {a}" for q, a in chat_history])
         response = chain.run(query)
         print(f"Agent: {response}\n")
