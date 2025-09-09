@@ -1,10 +1,8 @@
 from PyPDF2 import PdfReader
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.docstore.document import Document
 import argparse
-import lmstudio as lms
-from chat import LMStudioEmbeddings
+from embeddings import LMStudioEmbeddings
 
 store = None
 

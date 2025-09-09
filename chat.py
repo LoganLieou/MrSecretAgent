@@ -1,47 +1,83 @@
 from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
-from langchain_core.embeddings import Embeddings
-from langchain_openai import ChatOpenAI
-import lmstudio as lms
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.messages import HumanMessage
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_community.chat_models import ChatOpenAI
 
-# TODO I think I can just use this for embeddings in create_index too
-class LMStudioEmbeddings(Embeddings):
-    """
-    Special class to allow for using LM Studio embedding models with LangChain.
-    """
-    def __init__(self, model_name="text-embedding-nomic-embed-text-v1.5@q4_k_s"):
-        self.model = lms.embedding_model(model_name)
-    
-    def embed_documents(self, texts):
-        return [self.model.embed(text) for text in texts]
+# Assume you have LMStudioEmbeddings() already implemented
+from embeddings import LMStudioEmbeddings 
 
-    def embed_query(self, text):
-        return self.model.embed(text)
+# 1. Build FAISS retriever
+embedding_model = LMStudioEmbeddings()
+faiss_index = FAISS.load_local("faiss_index", embedding_model, allow_dangerous_deserialization=True)
+retriever = faiss_index.as_retriever()
 
-
-store = FAISS.load_local("faiss_index", LMStudioEmbeddings(), allow_dangerous_deserialization=True)
-
+# 2. Define the LLM
 llm = ChatOpenAI(
     model="openai/gpt-oss-20b",
     openai_api_base="http://localhost:1234/v1",
-    openai_api_key="lm-studio"
+    openai_api_key="fake_key"
 )
 
-chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    retriever=store.as_retriever()
-)
+# 3. Define the prompt with memory + retrieved context
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that uses past chat history and retrieved documents."),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("user", "{input}"),
+    ("system", "Relevant context:\n{context}")
+])
 
+# 4. Define the workflow state
+def retrieve_docs(state):
+    query = state["input"]
+    docs = retriever.get_relevant_documents(query)
+    state["context"] = "\n\n".join(d.page_content for d in docs)
+    return state
+
+def call_llm(state):
+    chain = prompt | llm
+    response = chain.invoke({
+        "chat_history": state["chat_history"],
+        "input": state["input"],
+        "context": state.get("context", "")
+    })
+    state["chat_history"].append(HumanMessage(content=state["input"]))
+    state["chat_history"].append(response)
+    state["output"] = response.content
+    return state
+
+# 5. Build the LangGraph
+workflow = StateGraph(dict)
+
+workflow.add_node("retrieve", retrieve_docs)
+workflow.add_node("llm", call_llm)
+
+workflow.add_edge("retrieve", "llm")
+workflow.set_entry_point("retrieve")
+workflow.set_finish_point("llm")
+
+# 6. Add memory (persists across turns)
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
+
+# Example usage
 if __name__ == "__main__":
-    print("Type 'exit' or 'quit' to end the chat.\n")
-    chat_history = []
+    thread = {"configurable": {"thread_id": "chat-1"}}  # required for MemorySaver
+
+    state = {"chat_history": []}
+    print("Chatbot ready! Type 'exit' to quit.\n")
+
     while True:
-        query = input("You: ")
-        if query.strip().lower() in ["exit", "quit"]:
-            print("Exiting chat.")
+        user_input = input("You: ")
+        if user_input.lower() in {"exit", "quit"}:
             break
-        context = "\n".join([f"Q: {q}\nA: {a}" for q, a in chat_history])
-        full_query = f"{context}\nQ: {query}" if chat_history else query
-        response = chain.run(full_query)
-        print(f"Agent: {response}\n")
-        chat_history.append((query, response))
+
+        state["input"] = user_input
+        result = app.invoke(state, config=thread)
+
+        print("Bot:", result["output"])
+
+        # Carry chat history forward
+        # state["chat_history"] = result["chat_history"]
